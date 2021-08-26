@@ -370,6 +370,7 @@ def Mark_GPS_of_Target(camera,vehicle,waypoint):
     global TargetCompleted
     global frame_counter
     global firstMessage
+    global total_Mean_Check
 
     for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
         # grab the raw NumPy array representing the image, then initialize the timestamp
@@ -485,10 +486,12 @@ def Mark_GPS_of_Target(camera,vehicle,waypoint):
                         Target_Location = vehicle.location.global_relative_frame
                         print("Location Found Global Location : %s" %vehicle.location.global_relative_frame)
                         TargetCompleted = True
+                        rawCapture.truncate(0)
                         break
         rawCapture.truncate(0)
         if waypoint_distance(waypoint) <= 1:
             print("Target Reached")
+            rawCapture.truncate(0)
             break
 
 def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
@@ -521,6 +524,9 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
     global firstMessage
     global Use_Circle_Check
     global Land_Target
+    global total_Mean_Check
+    global Show_Velocities_onScreen
+    global showCircleArea
     global upt
     PID_Velocity_X = 0
     PID_Velocity_Y = 0
@@ -682,23 +688,6 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
                     else:
                         Velocity_z = 0
 
-                    """
-                    if abs(cX - 320) > land_sensivity:
-                        if (cX - 320) > 0:
-                            Velocity_y = -0.2
-                        else:
-                            Velocity_y = 0.2
-                    else:
-                        Velocity_y = 0
-
-                    if abs(cY - 240) > land_sensivity:
-                        if (cY - 240) > 0:
-                            Velocity_x = 0.2
-                        else:
-                            Velocity_x = -0.2
-                    else:
-                        Velocity_x = 0
-                    """
                 # Daire'nin dışında ise
                 else:
                     if not ShowMessage:
@@ -706,26 +695,6 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
                         ShowMessage = True
 
                     Velocity_z = 0
-                    """
-                    if abs(cX - 320) > land_sensivity:
-                        if (cX - 320) > 0:
-                            Velocity_y = -1
-                        else:
-                            Velocity_y = 1
-                    else:
-                        Velocity_y = 0
-
-                    if abs(cY - 240) > land_sensivity:
-                        if (cY - 240) > 0:
-                            Velocity_x = 1
-                        else:
-                            Velocity_x = -1
-                    else:
-                        Velocity_x = 0
-                    # v_alt = vehicle.location.global_relative_frame.alt
-                    # if v_alt <= 2:
-                    #   Velocity_z = 0
-                """
 
                 if v_alt <= 2:
                     Velocity_z = 0
@@ -736,11 +705,13 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
                 if (v_alt - 0.2) <= 2 and abs(cY - 240) <= land_sensivity and abs(cX - 320) <= land_sensivity:
                     if Land_Target:
                         print("Vehicle Landing...")
+                        rawCapture.truncate(0)
                         vehicle.mode = VehicleMode("LAND")
                     else:
                         print('Breaking Loop...')
                         ortalandi = True
                         set_velocity_body(vehicle, 0, 0, 0)
+                        rawCapture.truncate(0)
                         break
 
             # Eğer daireyi görmüyorsa
@@ -838,6 +809,7 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
         if waypointBool:
             if waypoint_distance(waypoint) <= 1:
                 print("Target Reached")
+                rawCapture.truncate(0)
                 break
 
 # initialize the camera and grab a reference to the raw camera capture

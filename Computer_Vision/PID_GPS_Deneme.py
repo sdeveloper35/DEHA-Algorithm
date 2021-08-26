@@ -314,8 +314,8 @@ def Mark_GPS_of_Target(camera,vehicle,waypoint):
     global derivativeY
     global PID_Velocity_X
     global PID_Velocity_Y
-    global ShowMessage
-    global ShowMessageTarget
+    global ShowMessageifSeeTarget
+    global ShowMessageifinTarget
     global land_sensivity
     global target
     global ptin_contour
@@ -435,13 +435,13 @@ def Mark_GPS_of_Target(camera,vehicle,waypoint):
             findRedContours(image,contours,img_Center_X,img_Center_Y)
             v_alt = vehicle.location.global_relative_frame.alt
             if target:
-                # if ShowMessageTarget:
+                # if ShowMessageifSeeTarget:
                 print("Daire tespit EDILDI")
-                # ShowMessageTarget = False
+                # ShowMessageifSeeTarget = False
                 if ptin_contour == True:
-                    if ShowMessage:
+                    if ShowMessageifinTarget:
                         print("Daire'nin ICINDE")
-                        ShowMessage = False
+                        ShowMessageifinTarget = False
                         Target_Location = vehicle.location.global_relative_frame
                         print("Location Found Global Location : %s" %vehicle.location.global_relative_frame)
                         TargetCompleted = True
@@ -466,8 +466,8 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
     global derivativeY
     global PID_Velocity_X
     global PID_Velocity_Y
-    global ShowMessage
-    global ShowMessageTarget
+    global ShowMessageifinTarget
+    global ShowMessageifSeeTarget
     global Show_Velocities_onScreen
     global land_sensivity
     global target
@@ -633,13 +633,13 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
                 PID_Velocity_X = xR / 10
                 yR = int(PID_Velocity_Y * 10)
                 PID_Velocity_Y = yR / 10
-                # if ShowMessageTarget:
+                # if ShowMessageifSeeTarget:
                 print("Daire tespit EDILDI")
-                # ShowMessageTarget = False
+                # ShowMessageifSeeTarget = False
                 if ptin_contour == True:
-                    if ShowMessage:
+                    if ShowMessageifinTarget:
                         print("Daire'nin ICINDE")
-                        ShowMessage = False
+                        ShowMessageifinTarget = False
                     # v_alt = vehicle.location.global_relative_frame.alt
                     # Alçalmaya başla
                     if v_alt >= 2:
@@ -649,9 +649,9 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
 
                 # Daire'nin dışında ise
                 else:
-                    if not ShowMessage:
+                    if not ShowMessageifinTarget:
                         print("Daire'nin DISINDA")
-                        ShowMessage = True
+                        ShowMessageifinTarget = True
 
                     Velocity_z = 0
 
@@ -674,9 +674,9 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
 
             # Eğer daireyi görmüyorsa
             else:
-                # if not ShowMessageTarget:
+                # if not ShowMessageifSeeTarget:
                 print("Daire tespit EDILEMEDI")
-                # ShowMessageTarget = True
+                # ShowMessageifSeeTarget = True
                 # araç 2m'ye inmiş ve daireyi görmüyorsa
                 #-----------------------------Yükselme Eklenecek----------------------------------------
                 if TargetCompleted:

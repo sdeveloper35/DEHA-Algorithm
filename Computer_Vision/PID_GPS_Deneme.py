@@ -35,13 +35,42 @@ p = GPIO.PWM(servoPIN, 50) #GPIO 17 pini 50Hz ile pwm olarak ayarlandı
 p.start(2.5) # Initialization 20ms
 #-------------------------------------
 
-Land_Target = True
-target = False
-land_sensivity = 50  # pixel
-frame_counter = 0
-# Dronekit
+#-------Mission--------------------------
+Land_Target = True # Araç Land mi atsın 
+frame_counter = 0 # Frame sayacı
+#----------------------------------------
 
-# --------- PID ------
+
+
+#---------GÖRÜNTÜ İŞLEME DEĞİŞKENLERİ---------------
+target = False # Eğer ekranda herhangi bir kırmızı hedef saptıyorsa bu değişken true olur. ekranda hiç kırmızı görmüyor ise False olur.
+ptin_contour = False # Eğer kameramızın merkezi kırmızı hedefin sınırları içinde ise bu değişken True olur, aksi halde False değerini alır 
+
+land_sensivity = 50  # pixel kamera merkezinin kırmızı hedefin merkezine uzaklığı 50 pixelden az ise iniş yapar 
+frame_counter = 0 # frame sayacı
+contour_area = 0 # Bulunan kırmızı contour'un alanı ( pixel )
+cX = 0, cY = 0 # Bulunan kırmızı hedefin merkez noktasının x ve ykoordinatları (Tüm kodda kullanıldığı için global değişken olarak tanımlanmıştır)
+showCircleArea = True # True olur ise ekranda kırmızı hedefin alanını gösterir
+
+ShowMessageifinTarget = True  # içinde olup olmadığı (mesajın bir kere yazması için anahtar) (logging)
+ShowMessageifSeeTarget = True  # daireyi görüp görmediği (mesajın bir kere yazması için anahtar) (logging)
+circle_color = (0, 255, 0) # (görsellik) 
+contour_color = (0, 255, 0) # (görsellik)
+pool_font_color = (255, 255, 0) # (görsellik)
+Show_Velocities_onScreen = True #Tru ise ekranda PID ile hesaplanan hızları gösterir
+Aim_Length = 40 #(Görsel) merkez noktasındaki artının uzunluğu
+
+#Kullanılmayan Circle bulma yöntemi için olan değişkenler--------
+
+Use_Circle_Check = False # Bu değişken True olursa HoughCircle ile daire arar (performans kaybı çok olacağından bunu kullanmıyoruz. False olarak tutun)
+upt = False #Hough circle (daire bulma yöntemi için) (Şuan kullanılmıyor)
+total_Mean_Check = False # HoughCircle da kullanulan bir değişken
+hsv_Mean_limit = 60 # Hough circle
+
+#----------------------------------------------------------
+
+
+# --------- PID ---------------------------
 Kp = 0.0044
 Ki = 0
 Kd = 0.022
@@ -55,8 +84,10 @@ PID_Velocity_X = 1
 PID_Velocity_Y = 0
 
 max_Vel = 1.5
-#-------------------------------------------------------------------
 
+land_sensivity = 50  # pixel
+
+#---------------------Dronekit----------------------------------------------
 connection_address = '/dev/ttyACM0'  # kontrol et
 baud_rate = 115200
 take_off_altitude = 5  # in meter
@@ -65,20 +96,19 @@ air_speed = 5  # m/s
 land_speed = 60  # cm/s
 rtl_altitude = 5  # in meter
 
-Velocity_x = 1  # X ekseni hızı
+Velocity_x = 0  # X ekseni hızı
 Velocity_y = 0  # Y ekseni hızı
 Velocity_z = 0  # Z ekseni hızı
 
 # Hızların değişimini kontrol etmek için eksen hızlarını tutan değişkenler
-Velx_d = 0
+Velx_d = Velocity_x
 Vely_d = Velocity_y
 Velz_d = Velocity_z
-Show_Velocities_onScreen = True
 
-alt_sensivity = 0.3
-alt_speed = 0.3
-TargetCompleted = False
-ortalandi = False
+alt_sensivity = 0.3 
+alt_speed = 0.3 # Alçalıp yükselme hızı
+TargetCompleted = False # Hedefin GPS konumu alındı ise
+ortalandi = False # Hedefe gidip 2m'ye alçaldı ise
 Target_Location = (0.00, 0.00, 0)
 
 
@@ -219,27 +249,6 @@ def get_location_metres(original_location, dNorth, dEast):
     newlat = original_location.lat + (dLat * 180/math.pi)
     newlon = original_location.lon + (dLon * 180/math.pi)
     return(newlat, newlon)
-
-
-
-#---------------------------Opencv Variables------------------------------
-contour_area = 0
-cX = 0
-cY = 0
-
-upt = False
-ptin_contour = False
-circle_color = (0, 255, 0)
-contour_color = (0, 255, 0)
-pool_font_color = (255, 255, 0)
-Use_Circle_Check = False
-Aim_Length = 40
-total_Mean_Check = False
-hsv_Mean_limit = 60
-showCircleArea = True
-ShowMessage = True  # içinde olup olmadığı (mesajın bir kere yazması için anahtar) (logging)
-ShowMessageTarget = True  # daireyi görüp görmediği (mesajın bir kere yazması için anahtar) (logging)
-firstMessage = True  # ilk frame alındı mesajını 1 kere yazdırmak için değişken (ilk kare gelince konsola print atar ve false olur böylelikle birdaha print yazmaz)
 
 
 
@@ -441,6 +450,7 @@ def Mark_GPS_of_Target(camera,vehicle,waypoint):
         rawCapture.truncate(0)
         if waypoint_distance(waypoint) <= 1:
             print("Target Reached")
+            rawCapture.truncate(0)
             break
 
 
@@ -458,6 +468,7 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
     global PID_Velocity_Y
     global ShowMessage
     global ShowMessageTarget
+    global Show_Velocities_onScreen
     global land_sensivity
     global target
     global ptin_contour
@@ -475,6 +486,7 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
     global Use_Circle_Check
     global Land_Target
     global upt
+    global showCircleArea
     PID_Velocity_X = 0
     PID_Velocity_Y = 0
     Velocity_z = 0
@@ -635,23 +647,6 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
                     else:
                         Velocity_z = 0
 
-                    """
-                    if abs(cX - 320) > land_sensivity:
-                        if (cX - 320) > 0:
-                            Velocity_y = -0.2
-                        else:
-                            Velocity_y = 0.2
-                    else:
-                        Velocity_y = 0
-
-                    if abs(cY - 240) > land_sensivity:
-                        if (cY - 240) > 0:
-                            Velocity_x = 0.2
-                        else:
-                            Velocity_x = -0.2
-                    else:
-                        Velocity_x = 0
-                    """
                 # Daire'nin dışında ise
                 else:
                     if not ShowMessage:
@@ -659,26 +654,6 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
                         ShowMessage = True
 
                     Velocity_z = 0
-                    """
-                    if abs(cX - 320) > land_sensivity:
-                        if (cX - 320) > 0:
-                            Velocity_y = -1
-                        else:
-                            Velocity_y = 1
-                    else:
-                        Velocity_y = 0
-
-                    if abs(cY - 240) > land_sensivity:
-                        if (cY - 240) > 0:
-                            Velocity_x = 1
-                        else:
-                            Velocity_x = -1
-                    else:
-                        Velocity_x = 0
-                    # v_alt = vehicle.location.global_relative_frame.alt
-                    # if v_alt <= 2:
-                    #   Velocity_z = 0
-                """
 
                 if v_alt <= 2:
                     Velocity_z = 0
@@ -793,6 +768,7 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
         if waypointBool:
             if waypoint_distance(waypoint) <= 1:
                 print("Target Reached")
+                rawCapture.truncate(0)
                 break
 
 # initialize the camera and grab a reference to the raw camera capture

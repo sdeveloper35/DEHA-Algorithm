@@ -261,16 +261,16 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
     # Kırmızı daire (Normal)
-    lower_red = np.array([150, 50, 50])
-    upper_red = np.array([200, 255, 255])
+    #lower_red = np.array([150, 50, 50])
+    #upper_red = np.array([200, 255, 255])
 
     # for test - (karton için)
     #lower_red = np.array([0, 101, 0])
     #upper_red = np.array([179, 255, 255])
     
     #Gece ucusu - spot isigi altinda kirmizi daire(sahanin kirmizisini algilamayan)
-    #lower_red = np.array([0, 50, 117])
-    #upper_red = np.array([179, 160, 255])
+    lower_red = np.array([0, 50, 117])
+    upper_red = np.array([179, 160, 255])
     
     # Thresholding
     red_hue_range = cv2.inRange(hsv, lower_red, upper_red)
@@ -515,14 +515,14 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
 
     # video.write(image)     #Şuan video kaydetmek istemediğim için kullanmıyorum
 
-    #cv2.imshow('DETECTED CIRCLE', image)
+    cv2.imshow('DETECTED CIRCLE', image)
     # cv2.imshow('Gray',gray_blurred)
     # cv2.imshow('MASK', res)
     # cv2.imshow('CANNY',canny_edge)
     # cv2.imshow('RedHue',red_hue_range)
     # cv2.setMouseCallback('DETECTED CIRCLE', on_EVENT_LBUTTONDOWN)
     # cv2.waitKey(0)
-    """
+    
     key = cv2.waitKey(10)
     if key & 0xFF == ord('q'):
         break
@@ -535,11 +535,12 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
             Show_Velocities_onScreen = False
         else:
             Show_Velocities_onScreen = True
-    """
+    
     # clear the stream in preparation for the next frame
     rawCapture.truncate(0)
 
 #cv2.destroyAllWindows()
+
 
 
 

@@ -355,8 +355,13 @@ def Mark_GPS_of_Target(camera,vehicle,waypoint):
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
         # Kırmızı daire (Normal)
-        lower_red = np.array([150, 50, 50])
-        upper_red = np.array([200, 255, 255])
+        #lower_red = np.array([150, 50, 50])
+        #upper_red = np.array([200, 255, 255])
+
+        #Gece ucusu - spot isigi altinda kirmizi daire(sahanin kirmizisini algilamayan)
+        lower_red = np.array([0, 50, 117])
+        upper_red = np.array([179, 160, 255])
+    
 
         # for test - (karton için)
         # lower_red = np.array([0, 101, 0])
@@ -518,8 +523,13 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
         # Kırmızı daire (Normal)
-        lower_red = np.array([150, 50, 50])
-        upper_red = np.array([200, 255, 255])
+        #lower_red = np.array([150, 50, 50])
+        #upper_red = np.array([200, 255, 255])
+
+        #Gece ucusu - spot isigi altinda kirmizi daire(sahanin kirmizisini algilamayan)
+        lower_red = np.array([0, 50, 117])
+        upper_red = np.array([179, 160, 255])
+    
 
         # for test - (karton için)
         # lower_red = np.array([0, 101, 0])

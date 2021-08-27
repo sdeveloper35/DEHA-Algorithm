@@ -1,5 +1,4 @@
 # import the necessary packages
-# UPT hatası aldık -Global belirlenmemişti
 from picamera.array import PiRGBArray
 from picamera import PiCamera
 import time
@@ -12,17 +11,19 @@ from pymavlink import mavutil
 import math
 import RPi.GPIO as GPIO
 
+waypoint_1 = LocationGlobalRelative(38.3707239, 27.2009524, 5)
+"""
+waypoints = {
+    {38.3714614, 27.2007268, 5, }
+}
+"""
 
-acik = 45
-kapali = 100
-
+#Servo-------------------------------
 def get_pwm(angle):
     return (angle / 18) + 2.5
 
-
-def servo_go(servo, angle):
+def servo_go(servo , angle):
     servo.ChangeDutyCycle(get_pwm(angle))
-
 
 GPIO.setwarnings(False)
 
@@ -30,23 +31,54 @@ servoPIN = 17
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(servoPIN, GPIO.OUT)
 
-p = GPIO.PWM(servoPIN, 50)  # GPIO 17 pini 50Hz ile pwm olarak ayarlandı
-p.start(2.5)  # Initialization 20ms
+p = GPIO.PWM(servoPIN, 50) #GPIO 17 pini 50Hz ile pwm olarak ayarlandı
+p.start(2.5) # Initialization 20ms
+#-------------------------------------
 
-ReturnHome = False
+#-------Mission--------------------------
+Land_Target = True # Araç Land mi atsın
+frame_counter = 0 # Frame sayacı
+#----------------------------------------
 
-# servo_go(p , 0)
+#--------------Ağırlıklı Ortalama----------
+Target_Location_Aort_Lat = 0 # Ağırlıklı ortalama için enlemlerin toplamı
+Target_Location_Aort_Lon = 0 # Ağırlıklı Ortalama için boylamların Toplamı
+Target_Contour_Total = 0 # Ağırlıklı ortalama için Contourların Toplamı
+Target_Location_Aort = waypoint_1 # Ağırlıklı ortalama ile hesaplanan koordinat
 
-# p.stop()
-# GPIO.cleanup()
 
-Land_Target = False
-target = False
-land_sensivity = 50  # pixel
-frame_counter = 0
-# Dronekit
 
-# --------- PID ------
+
+#---------GÖRÜNTÜ İŞLEME DEĞİŞKENLERİ---------------
+target = False # Eğer ekranda herhangi bir kırmızı hedef saptıyorsa bu değişken true olur. ekranda hiç kırmızı görmüyor ise False olur.
+ptin_contour = False # Eğer kameramızın merkezi kırmızı hedefin sınırları içinde ise bu değişken True olur, aksi halde False değerini alır
+
+land_sensivity = 50  # pixel kamera merkezinin kırmızı hedefin merkezine uzaklığı 50 pixelden az ise iniş yapar
+frame_counter = 0 # frame sayacı
+contour_area = 0 # Bulunan kırmızı contour'un alanı ( pixel )
+cX = 0
+cY = 0 # Bulunan kırmızı hedefin merkez noktasının x ve ykoordinatları (Tüm kodda kullanıldığı için global değişken olarak tanımlanmıştır)
+showCircleArea = True # True olur ise ekranda kırmızı hedefin alanını gösterir
+
+ShowMessageifinTarget = True  # içinde olup olmadığı (mesajın bir kere yazması için anahtar) (logging)
+ShowMessageifSeeTarget = True  # daireyi görüp görmediği (mesajın bir kere yazması için anahtar) (logging)
+circle_color = (0, 255, 0) # (görsellik)
+contour_color = (0, 255, 0) # (görsellik)
+pool_font_color = (255, 255, 0) # (görsellik)
+Show_Velocities_onScreen = True #Tru ise ekranda PID ile hesaplanan hızları gösterir
+Aim_Length = 40 #(Görsel) merkez noktasındaki artının uzunluğu
+
+#Kullanılmayan Circle bulma yöntemi için olan değişkenler--------
+
+Use_Circle_Check = False # Bu değişken True olursa HoughCircle ile daire arar (performans kaybı çok olacağından bunu kullanmıyoruz. False olarak tutun)
+upt = False #Hough circle (daire bulma yöntemi için) (Şuan kullanılmıyor)
+total_Mean_Check = False # HoughCircle da kullanulan bir değişken
+hsv_Mean_limit = 60 # Hough circle
+
+#----------------------------------------------------------
+
+
+# --------- PID ---------------------------
 Kp = 0.0044
 Ki = 0
 Kd = 0.022
@@ -60,31 +92,11 @@ PID_Velocity_X = 1
 PID_Velocity_Y = 0
 
 max_Vel = 1.5
-#-------------------------------------------------------------------
-Velocity_x = 1  # X ekseni hızı
-Velocity_y = 0  # Y ekseni hızı
-Velocity_z = 0  # Z ekseni hızı
 
-# Hızların değişimini kontrol etmek için eksen hızlarını tutan değişkenler
-Velx_d = 0
-Vely_d = Velocity_y
-Velz_d = Velocity_z
-Show_Velocities_onScreen = True
+land_sensivity = 50  # pixel
 
-alt_sensivity = 0.3
-alt_speed = 0.3
-TargetCompleted = False
-ortalandi = False
-Target_Location = (0.00, 0.00, 0)
-
-
-################
-# -----PARAMETERS
-################
-# ---- Vehicle
-# connection_address = 'tcp:192.168.4.1:23'
-# connection_address = 'tcp:127.0.0.1:5763'
-connection_address = '/dev/ttyACM0'
+#---------------------Dronekit----------------------------------------------
+connection_address = '/dev/ttyACM0'  # kontrol et
 baud_rate = 115200
 take_off_altitude = 5  # in meter
 ground_speed = 5  # m/s
@@ -92,69 +104,51 @@ air_speed = 5  # m/s
 land_speed = 60  # cm/s
 rtl_altitude = 5  # in meter
 
-# ---- Waypoints
-waypoint_havuz = LocationGlobalRelative(38.3714838, 27.2006498, 5)  # longitude, lattitude, altitude
-waypoint_havuz_1m = LocationGlobalRelative(38.3714838, 27.2006498, 1.5)
+Velocity_x = 0  # X ekseni hızı
+Velocity_y = 0  # Y ekseni hızı
+Velocity_z = 0  # Z ekseni hızı
 
-waypoint_target = LocationGlobalRelative(38.3714291, 27.2006968, 5)  # longitude, lattitude, altitude
-waypoint_target_2m = LocationGlobalRelative(38.3714291, 27.2006968, 3)
+# Hızların değişimini kontrol etmek için eksen hızlarını tutan değişkenler
+Velx_d = Velocity_x
+Vely_d = Velocity_y
+Velz_d = Velocity_z
 
-waypoint_land = LocationGlobalRelative(38.3714344, 27.2006552, 5)
+alt_sensivity = 0.3
+alt_speed = 0.3 # Alçalıp yükselme hızı
+TargetCompleted = False # Hedefin GPS konumu alındı ise
+ortalandi = False # Hedefe gidip 2m'ye alçaldı ise
+Target_Location = (0.00, 0.00, 0)
 
 
-# ---------Functions
-# ---Print Parameters of Connected Vehicle
+# Connect to the vehicle on given address
+print("\nConnecting to vehicle on: " + connection_address + " with baud rate: " + str(baud_rate))
+vehicle = connect(connection_address, wait_ready=True, baud=baud_rate)
+waypoint_home = vehicle.location.global_frame
+
+#---------------------------------------Dronekit Functions--------------------------
+#---Print Parameters of Connected Vehicle
 def print_vehicle_parameters():
     # Get all vehicle attributes (state)
-    print("\nGet all vehicle attribute values:")
-    print(" Global Location: %s" % vehicle.location.global_frame)
-    print(" Global Location (relative altitude): %s" % vehicle.location.global_relative_frame)
-    print(" Local Location: %s" % vehicle.location.local_frame)
-    print(" Attitude: %s" % vehicle.attitude)
-    print(" Velocity: %s" % vehicle.velocity)
-    print(" GPS: %s" % vehicle.gps_0)
-    print(" EKF OK?: %s" % vehicle.ekf_ok)
-    print(" Last Heartbeat: %s" % vehicle.last_heartbeat)
-    print(" Rangefinder: %s" % vehicle.rangefinder)
-    print(" Rangefinder distance: %s" % vehicle.rangefinder.distance)
-    print(" Heading: %s" % vehicle.heading)
-    print(" Is Armable?: %s" % vehicle.is_armable)
-    print(" System status: %s" % vehicle.system_status.state)
-    print(" Groundspeed: %s" % vehicle.groundspeed)
-    print(" Airspeed: %s" % vehicle.airspeed)
-    print(" Mode: %s" % vehicle.mode.name)
-    print(" Armed: %s" % vehicle.armed)
-
-def Check_alt(TargetAltitude):
-    if vehicle.location.global_relative_frame.alt < TargetAltitude:
-        print("You are Ascending...")
-
-        #        İf target altitude is higher than our altitude
-
-        while True:
-            print(" Altitude: ", vehicle.location.global_relative_frame.alt)
-            # Break and return from function just below target altitude.
-            if vehicle.location.global_relative_frame.alt >= TargetAltitude * 0.95:
-                print("Reached target altitude")
-                break
-            time.sleep(1)
-
-    else:
-        print("You are Descending...")
-
-        #        İf target altitude is lower than our altitude
-
-        while True:
-            print(" Altitude: ", vehicle.location.global_relative_frame.alt)
-            # Break and return from function just below target altitude.
-            if vehicle.location.global_relative_frame.alt <= TargetAltitude * 1.05:
-                print("Reached target altitude")
-                break
-            time.sleep(1)
+    print ("\nGet all vehicle attribute values:")
+    print (" Global Location: %s" % vehicle.location.global_frame)
+    print (" Global Location (relative altitude): %s" % vehicle.location.global_relative_frame)
+    print (" Local Location: %s" % vehicle.location.local_frame)
+    print (" Attitude: %s" % vehicle.attitude)
+    print (" Velocity: %s" % vehicle.velocity)
+    print (" GPS: %s" % vehicle.gps_0)
+    print (" EKF OK?: %s" % vehicle.ekf_ok)
+    print (" Last Heartbeat: %s" % vehicle.last_heartbeat)
+    print (" Rangefinder: %s" % vehicle.rangefinder)
+    print (" Rangefinder distance: %s" % vehicle.rangefinder.distance)
+    print (" Heading: %s" % vehicle.heading)
+    print (" Is Armable?: %s" % vehicle.is_armable)
+    print (" System status: %s" % vehicle.system_status.state)
+    print (" Groundspeed: %s" % vehicle.groundspeed)
+    print (" Airspeed: %s" % vehicle.airspeed)
+    print (" Mode: %s" % vehicle.mode.name)
+    print (" Armed: %s" % vehicle.armed)
 
 
-# ----Arm and Take Off
-# TODO: take off and landing speed will be adjusted via a parameter
 # -- Define arm and takeoff
 def arm_and_takeoff(altitude):
     while not vehicle.is_armable:
@@ -206,23 +200,7 @@ def set_velocity_body(vehicle, vx, vy, vz):
     vehicle.flush()
 
 
-# ---- Get Distance in Meters
-def get_distance_metres(aLocation1, aLocation2):
-    """
-    Returns the ground distance in metres between two LocationGlobal objects.
-    This method is an approximation, and will not be accurate over large distances and close to the
-    earth's poles. It comes from the ArduPilot test code:
-    https://github.com/diydrones/ardupilot/blob/master/Tools/autotest/common.py
-    """
-    dlat = aLocation2.lat - aLocation1.lat
-    dlong = aLocation2.lon - aLocation1.lon
-    return math.sqrt((dlat * dlat) + (dlong * dlong)) * 1.113195e5
-
 def yukseklik_ayarla(vehicle, yukseklik, hiz, Vx, Vy):
-    if not Vx:
-        Vx = 0
-    if not Vy:
-        Vy = 0
     v_altitude = vehicle.location.global_relative_frame.alt
 
     if yukseklik > v_altitude:
@@ -241,16 +219,24 @@ def yukseklik_ayarla(vehicle, yukseklik, hiz, Vx, Vy):
             print(">> Altitude = %.1f m" % v_alt)
             if v_alt <= yukseklik + alt_sensivity:
                 break
-
     print("Target altitude reached")
     set_velocity_body(vehicle, 0, 0, 0)
 
-# ---- Distance Between The Vehicle and Given Waypoint
+#---- Get Distance in Meters
+def get_distance_metres(aLocation1, aLocation2):
+    """
+    Returns the ground distance in metres between two LocationGlobal objects.
+    This method is an approximation, and will not be accurate over large distances and close to the
+    earth's poles. It comes from the ArduPilot test code:
+    https://github.com/diydrones/ardupilot/blob/master/Tools/autotest/common.py
+    """
+    dlat = aLocation2.lat - aLocation1.lat
+    dlong = aLocation2.lon - aLocation1.lon
+    return math.sqrt((dlat * dlat) + (dlong * dlong)) * 1.113195e5
+#---- Distance Between The Vehicle and Given Waypoint
 def waypoint_distance(waypoint):
     distance = get_distance_metres(vehicle.location.global_frame, waypoint)
     return distance
-
-
 def get_location_metres(original_location, dNorth, dEast):
     """
     Returns a Location object containing the latitude/longitude `dNorth` and `dEast` metres from the
@@ -262,34 +248,15 @@ def get_location_metres(original_location, dNorth, dEast):
     For more information see:
     http://gis.stackexchange.com/questions/2951/algorithm-for-offsetting-a-latitude-longitude-by-some-amount-of-meters
     """
-    earth_radius = 6378137.0  # Radius of "spherical" earth
-    # Coordinate offsets in radians
-    dLat = dNorth / earth_radius
-    dLon = dEast / (earth_radius * math.cos(math.pi * original_location.lat / 180))
-    print("dlat, dlon", dLat, dLon)
-    # New position in decimal degrees
-    newlat = original_location.lat + (dLat * 180 / math.pi)
-    newlon = original_location.lon + (dLon * 180 / math.pi)
-    return (newlat, newlon)
-
-#---------------------------Opencv Variables------------------------------
-contour_area = 0
-cX = 0
-cY = 0
-
-upt = False
-ptin_contour = False
-circle_color = (0, 255, 0)
-contour_color = (0, 255, 0)
-pool_font_color = (255, 255, 0)
-Use_Circle_Check = False
-Aim_Length = 40
-total_Mean_Check = False
-hsv_Mean_limit = 60
-showCircleArea = True
-ShowMessage = True  # içinde olup olmadığı (mesajın bir kere yazması için anahtar) (logging)
-ShowMessageTarget = True  # daireyi görüp görmediği (mesajın bir kere yazması için anahtar) (logging)
-firstMessage = True  # ilk frame alındı mesajını 1 kere yazdırmak için değişken (ilk kare gelince konsola print atar ve false olur böylelikle birdaha print yazmaz)
+    earth_radius=6378137.0 #Radius of "spherical" earth
+    #Coordinate offsets in radians
+    dLat = dNorth/earth_radius
+    dLon = dEast/(earth_radius*math.cos(math.pi*original_location.lat/180))
+    print ("dlat, dlon", dLat, dLon)
+    #New position in decimal degrees
+    newlat = original_location.lat + (dLat * 180/math.pi)
+    newlon = original_location.lon + (dLon * 180/math.pi)
+    return(newlat, newlon)
 
 
 
@@ -342,6 +309,7 @@ def findRedContours(image,contours,img_Center_X,img_Center_Y):
             ptin_contour = False
 
 def Mark_GPS_of_Target(camera,vehicle,waypoint):
+    global contour_area
     global Use_Circle_Check
     global Target_Location
     global Kp
@@ -355,8 +323,8 @@ def Mark_GPS_of_Target(camera,vehicle,waypoint):
     global derivativeY
     global PID_Velocity_X
     global PID_Velocity_Y
-    global ShowMessage
-    global ShowMessageTarget
+    global ShowMessageifSeeTarget
+    global ShowMessageifinTarget
     global land_sensivity
     global target
     global ptin_contour
@@ -370,6 +338,11 @@ def Mark_GPS_of_Target(camera,vehicle,waypoint):
     global TargetCompleted
     global frame_counter
     global firstMessage
+    global upt
+    global Target_Location_Aort_Lat
+    global Target_Location_Aort_Lon
+    global Target_Contour_Total
+    global Target_Location_Aort
 
     for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
         # grab the raw NumPy array representing the image, then initialize the timestamp
@@ -475,21 +448,31 @@ def Mark_GPS_of_Target(camera,vehicle,waypoint):
             findRedContours(image,contours,img_Center_X,img_Center_Y)
             v_alt = vehicle.location.global_relative_frame.alt
             if target:
-                # if ShowMessageTarget:
+                Target_Location_Aort_Lat = Target_Location_Aort_Lat + float(vehicle.location.global_relative_frame.lat) * contour_area
+                Target_Location_Aort_Lon = Target_Location_Aort_Lon + float(vehicle.location.global_relative_frame.lon) * contour_area
+                Target_Contour_Total = Target_Contour_Total + contour_area
+
+                # if ShowMessageifSeeTarget:
                 print("Daire tespit EDILDI")
-                # ShowMessageTarget = False
+                # ShowMessageifSeeTarget = False
                 if ptin_contour == True:
-                    if ShowMessage:
+                    if ShowMessageifinTarget:
                         print("Daire'nin ICINDE")
-                        ShowMessage = False
+                        ShowMessageifinTarget = False
                         Target_Location = vehicle.location.global_relative_frame
                         print("Location Found Global Location : %s" %vehicle.location.global_relative_frame)
                         TargetCompleted = True
+                        rawCapture.truncate(0)
                         break
         rawCapture.truncate(0)
         if waypoint_distance(waypoint) <= 1:
             print("Target Reached")
+            rawCapture.truncate(0)
+            Lat_aort = Target_Location_Aort_Lat / Target_Contour_Total
+            Lon_aort = Target_Location_Aort_Lon / Target_Contour_Total
+            Target_Location_Aort = LocationGlobalRelative(Lat_aort, Lon_aort, 5)
             break
+
 
 def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
     global Kp
@@ -503,8 +486,9 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
     global derivativeY
     global PID_Velocity_X
     global PID_Velocity_Y
-    global ShowMessage
-    global ShowMessageTarget
+    global ShowMessageifinTarget
+    global ShowMessageifSeeTarget
+    global Show_Velocities_onScreen
     global land_sensivity
     global target
     global ptin_contour
@@ -522,6 +506,7 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
     global Use_Circle_Check
     global Land_Target
     global upt
+    global showCircleArea
     PID_Velocity_X = 0
     PID_Velocity_Y = 0
     Velocity_z = 0
@@ -668,13 +653,13 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
                 PID_Velocity_X = xR / 10
                 yR = int(PID_Velocity_Y * 10)
                 PID_Velocity_Y = yR / 10
-                # if ShowMessageTarget:
+                # if ShowMessageifSeeTarget:
                 print("Daire tespit EDILDI")
-                # ShowMessageTarget = False
+                # ShowMessageifSeeTarget = False
                 if ptin_contour == True:
-                    if ShowMessage:
+                    if ShowMessageifinTarget:
                         print("Daire'nin ICINDE")
-                        ShowMessage = False
+                        ShowMessageifinTarget = False
                     # v_alt = vehicle.location.global_relative_frame.alt
                     # Alçalmaya başla
                     if v_alt >= 2:
@@ -682,50 +667,13 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
                     else:
                         Velocity_z = 0
 
-                    """
-                    if abs(cX - 320) > land_sensivity:
-                        if (cX - 320) > 0:
-                            Velocity_y = -0.2
-                        else:
-                            Velocity_y = 0.2
-                    else:
-                        Velocity_y = 0
-
-                    if abs(cY - 240) > land_sensivity:
-                        if (cY - 240) > 0:
-                            Velocity_x = 0.2
-                        else:
-                            Velocity_x = -0.2
-                    else:
-                        Velocity_x = 0
-                    """
                 # Daire'nin dışında ise
                 else:
-                    if not ShowMessage:
+                    if not ShowMessageifinTarget:
                         print("Daire'nin DISINDA")
-                        ShowMessage = True
+                        ShowMessageifinTarget = True
 
                     Velocity_z = 0
-                    """
-                    if abs(cX - 320) > land_sensivity:
-                        if (cX - 320) > 0:
-                            Velocity_y = -1
-                        else:
-                            Velocity_y = 1
-                    else:
-                        Velocity_y = 0
-
-                    if abs(cY - 240) > land_sensivity:
-                        if (cY - 240) > 0:
-                            Velocity_x = 1
-                        else:
-                            Velocity_x = -1
-                    else:
-                        Velocity_x = 0
-                    # v_alt = vehicle.location.global_relative_frame.alt
-                    # if v_alt <= 2:
-                    #   Velocity_z = 0
-                """
 
                 if v_alt <= 2:
                     Velocity_z = 0
@@ -737,6 +685,7 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
                     if Land_Target:
                         print("Vehicle Landing...")
                         vehicle.mode = VehicleMode("LAND")
+                        break
                     else:
                         print('Breaking Loop...')
                         ortalandi = True
@@ -745,15 +694,16 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
 
             # Eğer daireyi görmüyorsa
             else:
-                # if not ShowMessageTarget:
+                # if not ShowMessageifSeeTarget:
                 print("Daire tespit EDILEMEDI")
-                # ShowMessageTarget = True
+                # ShowMessageifSeeTarget = True
                 # araç 2m'ye inmiş ve daireyi görmüyorsa
                 #-----------------------------Yükselme Eklenecek----------------------------------------
                 if TargetCompleted:
+                    print("GPS koordinati bulundu gittim ama daire evde yoktu Land atiyorum abi...")
                     vehicle.mode = VehicleMode("LAND")#Hiç daire görmüyorsa land atsın
                 #---------------------------------------------------------------------------------------
-                if v_alt <= 1 and not ptin_contour:
+                if v_alt <= 2 and not ptin_contour:
                     Velocity_z = 0
                     print("Arac 2m'ye indi zorunlu LAND atiyor...")
                     vehicle.mode = VehicleMode("LAND")
@@ -838,6 +788,7 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
         if waypointBool:
             if waypoint_distance(waypoint) <= 1:
                 print("Target Reached")
+                rawCapture.truncate(0)
                 break
 
 # initialize the camera and grab a reference to the raw camera capture
@@ -849,105 +800,62 @@ rawCapture = PiRGBArray(camera, size=(640, 480))
 # allow the camera to warmup
 time.sleep(0.1)
 
-
-print("\nConnecting to vehicle on: " + connection_address + " with baud rate: " + str(baud_rate))
-vehicle = connect(connection_address, wait_ready=True, baud=baud_rate)
-
-# Set first arming for rtl
-waypoint_home = vehicle.location.global_frame
-# Print all vehicle parameters
-print_vehicle_parameters()
-# TODO: After printing vehicle state, to continue the program ask for user approval and serve 3 option: refresh vehicle state, arm the vehicle, terminate the program
+# Dronekit
 # Set ground speed
-#vehicle.groundspeed = ground_speed
-#print(" Ground speed is set to " + str(ground_speed) + " m/s")
-# Set air speed
-#vehicle.airspeed = air_speed
-#print("Air speed is set to " + str(air_speed) + " m/s")
-# Set rtl altitude
-#vehicle.parameters['RTL_ALT'] = rtl_altitude
-# Set landing speed
-#vehicle.parameters['LAND_SPEED'] = land_speed
+# vehicle.groundspeed = ground_speed
+# print (" Ground speed is set to " + str(ground_speed) + " m/s")
 
-print("Land_Target : " + str(Land_Target))
+# Set air speed
+# vehicle.airspeed = air_speed
+# print ("Air speed is set to " + str(air_speed) + " m/s")
+
+# Set rtl altitude
+# vehicle.parameters['RTL_ALT'] = rtl_altitude
+
+# Set landing speed
+# vehicle.parameters['LAND_SPEED'] = land_speed
+
+print_vehicle_parameters()
+
 user_approval = input("Please press type 'arm' to start mission or type 'cancel' to cancel mission: ")
 while not (user_approval == "arm" or user_approval == "cancel"):
     print("Invalid input, please type again...")
     user_approval = input("Please press type 'arm' to start mission or type 'cancel' to cancel mission: ")
+
 if user_approval == "arm":
     # From Copter 3.3 you will be able to take off using a mission item. Plane must take off using a mission item (currently).
     arm_and_takeoff(take_off_altitude)
-    vehicle.simple_goto(waypoint_havuz)
-    print('Vehicle is going to waypoint_havuz')
-    while waypoint_distance(waypoint_havuz) >= 1:
-        print('Distance to waypoint havuz : %s' % waypoint_distance(waypoint_havuz))
-        time.sleep(1)
 
-    print("Water mechanism open...")
-    servo_go(p, acik)
-    vehicle.simple_goto(waypoint_havuz_1m)
-    print("Descending to 1 meter...")
-    print("10 seconds just started")
-    Check_alt(1.5)
-    time.sleep(5)
-    print("Water mechanism closed...")
-    servo_go(p, kapali)
+    waypoint_base = vehicle.location.global_frame
+    print("waypoint base has been taken : %s"%waypoint_base)
+
+    vehicle.simple_goto(waypoint_1)
+    print('Vehicle is going to waypoint_1')
+    Mark_GPS_of_Target(camera,vehicle,waypoint_1)
+    while waypoint_distance(waypoint_1) >= 1:
+        print('Distance to waypoint bosaltma alani : %s' % waypoint_distance(waypoint_1))
+        time.sleep(1)
     time.sleep(2)
-    vehicle.simple_goto(waypoint_havuz)
-    print("Vehicle Ascending to 5 meter again...")
-    Check_alt(5)
-    # time.sleep(7)
-
-    vehicle.simple_goto(waypoint_target)
-    print('Vehicle is going to waypoint target')
-    while waypoint_distance(waypoint_target) >= 1:
-        print('Distance to waypoint target : %s' % waypoint_distance(waypoint_target))
-        time.sleep(1)
-    FindTarget_WaterDropPool(camera, vehicle, waypoint_target, False)
-    if ortalandi:
-        print("Water mechanism opening...")
-        print("10 sec. to dropping water...")
-        servo_go(p, acik)
-        time.sleep(10)
-        print("Water mechanism closing...")
-        servo_go(p, kapali)
-        time.sleep(2)
-        print("Ascending for 5 meter...")
-        yukseklik_ayarla(vehicle, 5, 1.5, 0, 0)
-        Check_alt(5)
-
-
-    print("Inis konumuna gidiliyor...")
-    if ReturnHome:
-        vehicle.simple_goto(waypoint_home)
-        while waypoint_distance(waypoint_home) >= 1:
-            print('Distance to waypoint home : %s' % waypoint_distance(waypoint_home))
-        time.sleep(1)
-
-    else:
-        vehicle.simple_goto(waypoint_land)
-        # print ('Vehicle is going to waypoint land')
-        while waypoint_distance(waypoint_land) >= 1:
-            print('Distance to waypoint land : %s' % waypoint_distance(waypoint_land))
+    if TargetCompleted:
+        vehicle.simple_goto(Target_Location)
+        while waypoint_distance(Target_Location) >= 1:
+            print('Distance to waypoint bosaltma alani : %s' % waypoint_distance(Target_Location))
             time.sleep(1)
-
-    # Update home location to first take off point
-    vehicle.home_location = waypoint_home
-    print('Vehicle landing...')
+        FindTarget_WaterDropPool(camera,vehicle,Target_Location,False)
+    else:
+        vehicle.simple_goto(waypoint_base)
+        FindTarget_WaterDropPool(camera,vehicle,waypoint_base,True)
+        while waypoint_distance(waypoint_base) >= 1:
+            print('Distance to waypoint bosaltma alani : %s' % waypoint_distance(waypoint_base))
+            time.sleep(1)
     vehicle.mode = VehicleMode("LAND")
-    while vehicle.armed == True:
-        print(" Altitude: %s"  %vehicle.location.global_relative_frame.alt)
-        time.sleep(1)
-    print('Landing Completed')
-    print("Close vehicle object")
-    vehicle.close()
-else:
-    print("Mission denied...")
-    print("Close vehicle object")
-    vehicle.close()
 
-p.stop()
-GPIO.cleanup()
-print("PWM pini kapatildi")
+
+    #set_velocity_body(vehicle, Velocity_x, Velocity_y, Velocity_z)
+
+
+
+
+
 
 

@@ -11,7 +11,7 @@ from pymavlink import mavutil
 import math
 import RPi.GPIO as GPIO
 
-waypoint_1 = LocationGlobalRelative(38.3707239, 27.2009524, 5)
+waypoint_1 = LocationGlobalRelative(38.3707123, 27.2009484, 5)
 """
 waypoints = {
     {38.3714614, 27.2007268, 5, }
@@ -72,7 +72,7 @@ hsv_Mean_limit = 60 # Hough circle
 firstMessage = True # İlk frame alınınca 1 kere yazdırmak için 
 
 # --------- PID ---------------------------
-Kp = 0.0044
+Kp = 0.0022
 Ki = 0
 Kd = 0.022
 LastErrorX = 0
@@ -81,7 +81,7 @@ integralX = 0
 integralY = 0
 derivativeX = 0
 derivativeY = 0
-PID_Velocity_X = 1
+PID_Velocity_X = 0
 PID_Velocity_Y = 0
 
 max_Vel = 1.5
@@ -92,8 +92,8 @@ land_sensivity = 50  # pixel
 connection_address = '/dev/ttyACM0'  # kontrol et
 baud_rate = 115200
 take_off_altitude = 5  # in meter
-ground_speed = 5  # m/s
-air_speed = 5  # m/s
+ground_speed = 3  # m/s
+air_speed = 3  # m/s
 land_speed = 60  # cm/s
 rtl_altitude = 5  # in meter
 
@@ -355,12 +355,12 @@ def Mark_GPS_of_Target(camera,vehicle,waypoint):
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
         # Kırmızı daire (Normal)
-        #lower_red = np.array([150, 50, 50])
-        #upper_red = np.array([200, 255, 255])
+        lower_red = np.array([150, 50, 50])
+        upper_red = np.array([200, 255, 255])
 
         #Gece ucusu - spot isigi altinda kirmizi daire(sahanin kirmizisini algilamayan)
-        lower_red = np.array([0, 50, 117])
-        upper_red = np.array([179, 160, 255])
+        #lower_red = np.array([0, 50, 117])
+        #upper_red = np.array([179, 160, 255])
     
 
         # for test - (karton için)
@@ -523,12 +523,12 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
         # Kırmızı daire (Normal)
-        #lower_red = np.array([150, 50, 50])
-        #upper_red = np.array([200, 255, 255])
+        lower_red = np.array([150, 50, 50])
+        upper_red = np.array([200, 255, 255])
 
         #Gece ucusu - spot isigi altinda kirmizi daire(sahanin kirmizisini algilamayan)
-        lower_red = np.array([0, 50, 117])
-        upper_red = np.array([179, 160, 255])
+        #lower_red = np.array([0, 50, 117])
+        #upper_red = np.array([179, 160, 255])
     
 
         # for test - (karton için)
@@ -706,7 +706,7 @@ def FindTarget_WaterDropPool(camera,vehicle,waypoint,waypointBool):
                 Vely_d = PID_Velocity_Y
                 Velz_d = Velocity_z
                 # Eğer herhangi bir hız değişti ise gönder
-                set_velocity_body(vehicle, PID_Velocity_X, PID_Velocity_Y, Velocity_z)
+            set_velocity_body(vehicle, PID_Velocity_X, PID_Velocity_Y, Velocity_z)
         # Dairenin içinde mi?
         if upt:
             distance = (((a - img_Center_X) ** 2) + ((b - img_Center_Y) ** 2)) ** 0.5
@@ -793,12 +793,12 @@ time.sleep(0.1)
 
 # Dronekit
 # Set ground speed
-# vehicle.groundspeed = ground_speed
-# print (" Ground speed is set to " + str(ground_speed) + " m/s")
+vehicle.groundspeed = ground_speed
+print (" Ground speed is set to " + str(ground_speed) + " m/s")
 
 # Set air speed
-# vehicle.airspeed = air_speed
-# print ("Air speed is set to " + str(air_speed) + " m/s")
+vehicle.airspeed = air_speed
+print ("Air speed is set to " + str(air_speed) + " m/s")
 
 # Set rtl altitude
 # vehicle.parameters['RTL_ALT'] = rtl_altitude
@@ -826,12 +826,13 @@ if user_approval == "arm":
     while waypoint_distance(waypoint_1) >= 1:
         print('Distance to waypoint bosaltma alani : %s' % waypoint_distance(waypoint_1))
         time.sleep(1)
-    time.sleep(2)
+    time.sleep(4)
     if TargetCompleted:
-        vehicle.simple_goto(Target_Location)
+        vehicle.simple_goto(Target_Location,groundspeed=1)
         while waypoint_distance(Target_Location) >= 1:
             print('Distance to waypoint bosaltma alani : %s' % waypoint_distance(Target_Location))
             time.sleep(1)
+        time.sleep(5)
         FindTarget_WaterDropPool(camera,vehicle,Target_Location,False)
     else:
         vehicle.simple_goto(waypoint_base)
